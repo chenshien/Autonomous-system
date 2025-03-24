@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - 自动化流程系统</title>
+    <!-- 引入Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- 引入Bootstrap图标 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <!-- 引入Google字体 -->
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- 引入自定义CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <style>
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-container {
+            max-width: 450px;
+            width: 100%;
+            padding: 40px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo img {
+            max-width: 100px;
+            margin-bottom: 15px;
+        }
+        .logo h1 {
+            color: var(--primary-color);
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+        .login-methods {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        .login-method {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        .login-method.active {
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+        .login-method.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background-color: var(--primary-color);
+        }
+        .login-form {
+            margin-top: 20px;
+        }
+        .captcha-container {
+            display: flex;
+            gap: 10px;
+        }
+        .captcha-container img {
+            height: 38px;
+            border: 1px solid #ced4da;
+            border-radius: 0.25rem;
+            cursor: pointer;
+        }
+        .captcha-container button {
+            flex-shrink: 0;
+        }
+        .social-login {
+            margin-top: 20px;
+            text-align: center;
+        }
+        .social-icons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .social-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #f8f9fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: #666;
+            transition: all 0.3s ease;
+        }
+        .social-icon:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        .social-icon.wechat { color: #09b83e; }
+        .social-icon.dingtalk { color: #1f90fe; }
+        .social-icon.feishu { color: #00d6b9; }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">
+            <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo" onerror="this.src='https://via.placeholder.com/100x100?text=Logo'">
+            <h1>自动化流程系统</h1>
+            <p class="text-muted">高效、智能的企业级流程管理平台</p>
+        </div>
+        
+        <!-- 登录方式选择 -->
+        <div class="login-methods">
+            <div class="login-method active" onclick="showLoginForm('password')">账号密码登录</div>
+            <div class="login-method" onclick="showLoginForm('mobile')">手机验证码登录</div>
+            <div class="login-method" onclick="showLoginForm('scan')">扫码登录</div>
+        </div>
+        
+        <!-- 错误消息展示 -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <!-- 账号密码登录表单 -->
+        <form method="POST" action="{{ url_for('auth.login') }}" class="login-form" id="passwordLoginForm">
+            {{ form.hidden_tag() }}
+            <div class="mb-3">
+                <label for="username" class="form-label">用户名</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-person"></i></span>
+                    <input type="text" class="form-control" id="username" name="username" required autofocus>
+                </div>
+                {% if form.username.errors %}
+                    <div class="text-danger">
+                        {% for error in form.username.errors %}
+                            <small>{{ error }}</small>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+            <div class="mb-3">
+                <label for="password" class="form-label">密码</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                    <input type="password" class="form-control" id="password" name="password" required>
+                    <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility()">
+                        <i class="bi bi-eye" id="togglePassword"></i>
+                    </button>
+                </div>
+                {% if form.password.errors %}
+                    <div class="text-danger">
+                        {% for error in form.password.errors %}
+                            <small>{{ error }}</small>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+            <div class="mb-3">
+                <label for="captcha" class="form-label">验证码</label>
+                <div class="captcha-container">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-shield-lock"></i></span>
+                        <input type="text" class="form-control" id="captcha" name="captcha" required>
+                    </div>
+                    <img id="captchaImage" src="{{ url_for('auth.captcha') }}" alt="验证码" title="点击刷新验证码">
+                </div>
+                {% if form.captcha.errors %}
+                    <div class="text-danger">
+                        {% for error in form.captcha.errors %}
+                            <small>{{ error }}</small>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+            <div class="mb-3 form-check">
+                <input type="checkbox" class="form-check-input" id="remember" name="remember">
+                <label class="form-check-label" for="remember">记住我</label>
+                <a href="{{ url_for('auth.reset_password_request') }}" class="float-end">忘记密码？</a>
+            </div>
+            <div class="d-grid">
+                <button type="submit" class="btn btn-primary">登录</button>
+            </div>
+        </form>
+        
+        <!-- 手机验证码登录表单 -->
+        <form method="POST" action="{{ url_for('auth.login_mobile') }}" class="login-form d-none" id="mobileLoginForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-3">
+                <label for="mobile" class="form-label">手机号码</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-phone"></i></span>
+                    <input type="text" class="form-control" id="mobile" name="mobile" placeholder="请输入手机号码" required>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label for="sms_code" class="form-label">短信验证码</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-shield-lock"></i></span>
+                    <input type="text" class="form-control" id="sms_code" name="sms_code" placeholder="请输入验证码" required>
+                    <button class="btn btn-outline-primary" type="button" onclick="sendSmsCode()">获取验证码</button>
+                </div>
+            </div>
+            <div class="d-grid">
+                <button type="submit" class="btn btn-primary">登录</button>
+            </div>
+        </form>
+        
+        <!-- 扫码登录面板 -->
+        <div class="login-form d-none text-center" id="scanLoginForm">
+            <div class="p-4 mb-3 bg-light rounded">
+                <div class="qrcode-container">
+                    <img src="https://via.placeholder.com/200x200?text=QR+Code" alt="二维码" class="img-fluid mb-3">
+                </div>
+                <p class="text-muted">请使用企业移动端APP扫描二维码登录</p>
+            </div>
+            <div class="d-grid">
+                <button type="button" class="btn btn-outline-secondary" onclick="refreshQrCode()">
+                    <i class="bi bi-arrow-clockwise"></i> 刷新二维码
+                </button>
+            </div>
+        </div>
+        
+        <!-- 第三方登录 -->
+        <div class="social-login">
+            <p class="text-muted">其他登录方式</p>
+            <div class="social-icons">
+                <a href="{{ url_for('auth.oauth_login', provider='wechat') }}" class="social-icon wechat" title="微信登录">
+                    <i class="bi bi-wechat"></i>
+                </a>
+                <a href="{{ url_for('auth.oauth_login', provider='dingtalk') }}" class="social-icon dingtalk" title="钉钉登录">
+                    <i class="bi bi-chat-square-text"></i>
+                </a>
+                <a href="{{ url_for('auth.oauth_login', provider='feishu') }}" class="social-icon feishu" title="飞书登录">
+                    <i class="bi bi-lightning"></i>
+                </a>
+            </div>
+        </div>
+        
+        <hr class="my-4">
+        <div class="text-center">
+            <p class="text-muted mb-0">&copy; {{ current_year }} 自动化流程系统</p>
+        </div>
+    </div>
+
+    <!-- 引入Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- 引入自定义JS -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+        // 切换登录方式
+        function showLoginForm(type) {
+            document.querySelectorAll('.login-method').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.login-form').forEach(el => el.classList.add('d-none'));
+            
+            if (type === 'password') {
+                document.querySelector('.login-method:nth-child(1)').classList.add('active');
+                document.getElementById('passwordLoginForm').classList.remove('d-none');
+            } else if (type === 'mobile') {
+                document.querySelector('.login-method:nth-child(2)').classList.add('active');
+                document.getElementById('mobileLoginForm').classList.remove('d-none');
+            } else if (type === 'scan') {
+                document.querySelector('.login-method:nth-child(3)').classList.add('active');
+                document.getElementById('scanLoginForm').classList.remove('d-none');
+            }
+        }
+        
+        // 切换密码可见性
+        function togglePasswordVisibility() {
+            const passwordInput = document.getElementById('password');
+            const icon = document.getElementById('togglePassword');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                icon.classList.replace('bi-eye', 'bi-eye-slash');
+            } else {
+                passwordInput.type = 'password';
+                icon.classList.replace('bi-eye-slash', 'bi-eye');
+            }
+        }
+        
+        // 发送短信验证码
+        function sendSmsCode() {
+            const mobile = document.getElementById('mobile').value;
+            if (!mobile) {
+                alert('请输入手机号码');
+                return;
+            }
+            
+            // 倒计时
+            const sendButton = event.currentTarget;
+            sendButton.disabled = true;
+            let countdown = 60;
+            sendButton.innerText = `${countdown}秒后重新获取`;
+            
+            const timer = setInterval(() => {
+                countdown--;
+                if (countdown <= 0) {
+                    clearInterval(timer);
+                    sendButton.disabled = false;
+                    sendButton.innerText = '获取验证码';
+                } else {
+                    sendButton.innerText = `${countdown}秒后重新获取`;
+                }
+            }, 1000);
+            
+            // 发送请求
+            fetch(`/api/auth/send-sms-code?mobile=${mobile}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast('验证码发送成功，请查收', 'success');
+                    } else {
+                        showToast(data.message || '验证码发送失败', 'danger');
+                        clearInterval(timer);
+                        sendButton.disabled = false;
+                        sendButton.innerText = '获取验证码';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('验证码发送失败，请稍后重试', 'danger');
+                    clearInterval(timer);
+                    sendButton.disabled = false;
+                    sendButton.innerText = '获取验证码';
+                });
+        }
+        
+        // 刷新二维码
+        function refreshQrCode() {
+            const qrCodeImg = document.querySelector('.qrcode-container img');
+            qrCodeImg.src = 'https://via.placeholder.com/200x200?text=QR+Code&' + new Date().getTime();
+        }
+        
+        // 通用消息提示
+        function showToast(message, type = 'info') {
+            const toastEl = document.createElement('div');
+            toastEl.className = `alert alert-${type} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
+            toastEl.style.zIndex = '9999';
+            toastEl.style.maxWidth = '90%';
+            toastEl.style.width = '400px';
+            
+            toastEl.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            
+            document.body.appendChild(toastEl);
+            
+            setTimeout(() => {
+                const bsAlert = new bootstrap.Alert(toastEl);
+                bsAlert.close();
+            }, 3000);
+        }
+        
+        // 初始化验证码点击刷新
+        document.addEventListener('DOMContentLoaded', function() {
+            const captchaImage = document.getElementById('captchaImage');
+            if (captchaImage) {
+                captchaImage.addEventListener('click', function() {
+                    this.src = '{{ url_for("auth.captcha") }}?' + new Date().getTime();
+                });
+            }
+        });
+    </script>
+</body>
+</html> 

@@ -1,0 +1,78 @@
+{% extends "wizard/layout.html" %}
+{% set title = "欢迎使用" %}
+
+{% block content %}
+<div class="text-center mb-4">
+    <h2>欢迎使用自动化流程系统</h2>
+    <p class="lead">
+        这个向导将引导您完成系统的初始化设置，请按照步骤操作以确保系统正常运行。
+    </p>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-check-circle text-success mr-2"></i>您将完成以下设置</h5>
+                <ul class="list-unstyled">
+                    <li><i class="fas fa-angle-right mr-2"></i>系统环境检查</li>
+                    <li><i class="fas fa-angle-right mr-2"></i>数据库配置</li>
+                    <li><i class="fas fa-angle-right mr-2"></i>管理员账户创建</li>
+                    <li><i class="fas fa-angle-right mr-2"></i>字体资源配置</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-tools text-primary mr-2"></i>准备工作</h5>
+                <ul class="list-unstyled">
+                    <li><i class="fas fa-angle-right mr-2"></i>确保您拥有管理员权限</li>
+                    <li><i class="fas fa-angle-right mr-2"></i>准备好数据库连接信息</li>
+                    <li><i class="fas fa-angle-right mr-2"></i>确保您的系统满足最低要求</li>
+                    <li><i class="fas fa-angle-right mr-2"></i>准备安装所需的第三方软件</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h5 class="card-title"><i class="fas fa-flag text-warning mr-2"></i>系统要求</h5>
+        <div class="row">
+            <div class="col-md-4">
+                <p><strong>操作系统:</strong></p>
+                <ul>
+                    <li>Windows 10/11</li>
+                    <li>Linux (Ubuntu 18.04+)</li>
+                    <li>macOS 10.14+</li>
+                </ul>
+            </div>
+            <div class="col-md-4">
+                <p><strong>必要组件:</strong></p>
+                <ul>
+                    <li>Python 3.7+</li>
+                    <li>MySQL 5.7+ 或 SQLite 3</li>
+                    <li>wkhtmltopdf (PDF生成)</li>
+                </ul>
+            </div>
+            <div class="col-md-4">
+                <p><strong>浏览器:</strong></p>
+                <ul>
+                    <li>Chrome 80+</li>
+                    <li>Firefox 78+</li>
+                    <li>Edge 80+</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="text-center mt-4">
+    <a href="{{ url_for('wizard.step', step=next_step) }}" class="btn btn-primary btn-lg">
+        <i class="fas fa-arrow-right mr-2"></i>开始安装
+    </a>
+</div>
+{% endblock %} 

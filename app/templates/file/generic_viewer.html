@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}查看文件 - {{ file.original_filename }} - 自动化流程系统{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<style>
+    .file-container {
+        width: 100%;
+        min-height: 600px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        overflow: hidden;
+    }
+    .file-frame {
+        width: 100%;
+        height: 100%;
+        min-height: 600px;
+        border: none;
+    }
+    .watermark-notice {
+        font-size: 13px;
+        color: #666;
+        padding: 10px;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        border-left: 3px solid #17a2b8;
+        margin-bottom: 15px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="row mb-3">
+        <div class="col">
+            <h4 class="mb-0">
+                <i class="bi bi-file-earmark-text me-2"></i>{{ file.original_filename }}
+            </h4>
+            <p class="text-muted mb-0">
+                <small>上传于: {{ file.created_at.strftime('%Y-%m-%d %H:%M') }} | 大小: {{ (file.file_size / 1024)|round(2) }} KB</small>
+            </p>
+        </div>
+        <div class="col-auto">
+            <div class="btn-group">
+                <a href="{{ url_for('file.download_file', id=file.id) }}" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-download me-1"></i>下载
+                </a>
+                
+                {% if can_print %}
+                <a href="{{ url_for('file.print_file', id=file.id) }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-printer me-1"></i>打印
+                </a>
+                {% endif %}
+                
+                {% if instance %}
+                <a href="{{ url_for('main.workflow_instance', id=instance.id) }}" class="btn btn-outline-info btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i>返回流程
+                </a>
+                {% else %}
+                <a href="{{ url_for('main.index') }}" class="btn btn-outline-info btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i>返回首页
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="watermark-notice">
+        <i class="bi bi-shield-lock me-2"></i>
+        查看文件时带有水印，保护文档安全。水印内容包含：用户名({{ current_user.username }})、用户姓名({{ current_user.full_name }})及当前时间。
+    </div>
+    
+    <div class="row">
+        <div class="col-md-9">
+            <div class="file-container">
+                <iframe src="{{ file_url }}" class="file-frame"></iframe>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">文件信息</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>文件名</span>
+                            <span class="text-truncate" style="max-width: 200px;" title="{{ file.original_filename }}">{{ file.original_filename }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>文件类型</span>
+                            <span>{{ file.file_type|upper }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>文件大小</span>
+                            <span>{{ (file.file_size / 1024)|round(2) }} KB</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>上传者</span>
+                            <span>{{ file.creator.full_name or file.creator.username }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>上传时间</span>
+                            <span>{{ file.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- 文件操作记录 -->
+            <div class="card mt-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">操作记录</h5>
+                    <button class="btn btn-sm btn-outline-primary" id="refresh-operations">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div id="operations-container">
+                        <div class="text-center p-3">
+                            <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                <span class="visually-hidden">加载中...</span>
+                            </div>
+                            <p class="text-muted mt-2">加载操作记录...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 获取操作记录
+    loadOperations();
+    
+    // 刷新操作记录按钮
+    document.getElementById('refresh-operations').addEventListener('click', function() {
+        loadOperations();
+    });
+    
+    function loadOperations() {
+        fetch('{{ url_for("file.get_file_operations", id=file.id) }}')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateOperationsList(data.data);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading operations:', error);
+                document.getElementById('operations-container').innerHTML = `
+                    <div class="text-center p-3">
+                        <p class="text-danger">加载失败，请重试</p>
+                    </div>
+                `;
+            });
+    }
+    
+    function updateOperationsList(operations) {
+        const container = document.getElementById('operations-container');
+        
+        if (operations.length === 0) {
+            container.innerHTML = `
+                <div class="text-center p-3">
+                    <p class="text-muted">暂无操作记录</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '<ul class="list-group list-group-flush">';
+        
+        operations.forEach(operation => {
+            const date = new Date(operation.operation_time);
+            let operationType = '';
+            
+            switch(operation.operation_type) {
+                case 'upload': operationType = '上传'; break;
+                case 'view': operationType = '查看'; break;
+                case 'edit': operationType = '编辑'; break;
+                case 'sign': operationType = '签署'; break;
+                case 'delete': operationType = '删除'; break;
+                case 'print': operationType = '打印'; break;
+                default: operationType = operation.operation_type;
+            }
+            
+            html += `
+                <li class="list-group-item">
+                    <div class="d-flex justify-content-between">
+                        <span>${operation.user.full_name || operation.user.username}</span>
+                        <span class="badge bg-info">${operationType}</span>
+                    </div>
+                    <small class="text-muted">
+                        ${date.toLocaleString()}
+                    </small>
+                </li>
+            `;
+        });
+        
+        html += '</ul>';
+        container.innerHTML = html;
+    }
+});
+</script>
+{% endblock %} 

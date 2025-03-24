@@ -1,0 +1,266 @@
+{% extends "wizard/layout.html" %}
+{% set title = "字体资源配置" %}
+
+{% block content %}
+<h2 class="mb-4"><i class="fas fa-font mr-2"></i>字体资源配置</h2>
+<p class="lead mb-4">
+    系统需要一些基础字体来支持多语言和特殊符号的显示，特别是在生成PDF和打印文档时。
+</p>
+
+{% if missing_fonts %}
+<div class="alert alert-warning">
+    <i class="fas fa-exclamation-triangle mr-2"></i>以下必需字体未找到，系统将尝试从您的操作系统中复制：
+    <ul>
+        {% for font in missing_fonts %}
+        <li><strong>{{ font }}</strong></li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="fas fa-check-circle mr-2"></i>必需字体</h5>
+    </div>
+    <div class="card-body">
+        <p>以下字体是系统必需的基础字体，用于确保基本功能正常工作：</p>
+        
+        <div class="table-responsive">
+            <table class="table table-hover" id="required-fonts-table">
+                <thead>
+                    <tr>
+                        <th>字体名称</th>
+                        <th>文件名</th>
+                        <th>状态</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for font_file in required_fonts %}
+                        {% set font_info = None %}
+                        {% for category, fonts in {'chinese': available_fonts|selectattr('category', 'eq', 'chinese')|list,
+                                                'english': available_fonts|selectattr('category', 'eq', 'english')|list,
+                                                'symbol': available_fonts|selectattr('category', 'eq', 'symbol')|list,
+                                                'serif': available_fonts|selectattr('category', 'eq', 'serif')|list,
+                                                'sans-serif': available_fonts|selectattr('category', 'eq', 'sans-serif')|list}.items() %}
+                            {% for font in fonts %}
+                                {% if font.file == font_file %}
+                                    {% set font_info = font %}
+                                {% endif %}
+                            {% endfor %}
+                        {% endfor %}
+                        
+                        {% if font_info %}
+                        <tr>
+                            <td>{{ font_info.name }}</td>
+                            <td><code>{{ font_info.file }}</code></td>
+                            <td>
+                                {% if font_info.available %}
+                                <span class="badge badge-success">已安装</span>
+                                {% else %}
+                                <span class="badge badge-danger">未安装</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if not font_info.available %}
+                                <button type="button" class="btn btn-sm btn-primary copy-font" data-font="{{ font_info.file }}">
+                                    <i class="fas fa-copy mr-1"></i>复制字体
+                                </button>
+                                {% else %}
+                                <span class="text-muted">已可用</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0"><i class="fas fa-list mr-2"></i>可用字体</h5>
+    </div>
+    <div class="card-body">
+        <p>以下是系统可以使用的所有字体资源：</p>
+        
+        <ul class="nav nav-tabs mb-3" id="fontTabs" role="tablist">
+            <li class="nav-item">
+                <a class="nav-link active" id="chinese-tab" data-toggle="tab" href="#chinese" role="tab">中文字体</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="english-tab" data-toggle="tab" href="#english" role="tab">英文字体</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="symbol-tab" data-toggle="tab" href="#symbol" role="tab">符号字体</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="serif-tab" data-toggle="tab" href="#serif" role="tab">衬线字体</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="sans-serif-tab" data-toggle="tab" href="#sans-serif" role="tab">无衬线字体</a>
+            </li>
+        </ul>
+        
+        <div class="tab-content" id="fontTabsContent">
+            {% for category, label in [('chinese', '中文字体'), ('english', '英文字体'), ('symbol', '符号字体'), ('serif', '衬线字体'), ('sans-serif', '无衬线字体')] %}
+            <div class="tab-pane fade {% if category == 'chinese' %}show active{% endif %}" id="{{ category }}" role="tabpanel">
+                <div class="table-responsive">
+                    <table class="table table-hover font-table">
+                        <thead>
+                            <tr>
+                                <th>字体名称</th>
+                                <th>描述</th>
+                                <th>文件名</th>
+                                <th>状态</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for font in available_fonts if font.category == category %}
+                            <tr>
+                                <td>{{ font.name }}</td>
+                                <td>{{ font.desc }}</td>
+                                <td><code>{{ font.file }}</code></td>
+                                <td>
+                                    {% if font.available %}
+                                    <span class="badge badge-success">已安装</span>
+                                    {% else %}
+                                    <span class="badge badge-secondary">未安装</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if not font.available %}
+                                    <button type="button" class="btn btn-sm btn-outline-primary copy-font" data-font="{{ font.file }}">
+                                        <i class="fas fa-copy mr-1"></i>复制字体
+                                    </button>
+                                    {% else %}
+                                    <span class="text-muted">已可用</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0"><i class="fas fa-eye mr-2"></i>字体预览</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            {% for category, label in [('chinese', '中文字体示例'), ('english', '英文字体示例'), ('symbol', '符号字体示例')] %}
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">{{ label }}</div>
+                        <div class="card-body">
+                            {% for font in available_fonts if font.category == category and font.available %}
+                                <div class="font-preview" style="font-family: '{{ font.name }}';">
+                                    <h6>{{ font.name }}</h6>
+                                    {% if font.category == 'chinese' %}
+                                    <p>中文示例：我能吞下玻璃而不伤身体。</p>
+                                    {% elif font.category == 'english' %}
+                                    <p>English: The quick brown fox jumps over the lazy dog.</p>
+                                    {% elif font.category == 'symbol' %}
+                                    <p>Symbols: ∑ π ∞ ♠ ♣ ♥ ♦ ★ ☺ ☻</p>
+                                    {% endif %}
+                                </div>
+                                <hr>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<form method="post" action="{{ url_for('wizard.step', step='fonts') }}">
+    <div class="d-flex justify-content-between mt-4">
+        <a href="{{ url_for('wizard.step', step='admin') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left mr-2"></i>返回
+        </a>
+        <button type="submit" class="btn btn-primary">
+            完成配置<i class="fas fa-arrow-right ml-2"></i>
+        </button>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        // 字体复制功能
+        $('.copy-font').click(function() {
+            var fontFile = $(this).data('font');
+            var $button = $(this);
+            
+            $button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i>复制中...');
+            
+            $.ajax({
+                url: '{{ url_for("wizard.test_font") }}',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({font_file: fontFile}),
+                success: function(response) {
+                    if (response.success) {
+                        $button.removeClass('btn-primary btn-outline-primary').addClass('btn-success')
+                               .html('<i class="fas fa-check mr-1"></i>已复制');
+                        
+                        // 更新状态标签
+                        $button.closest('tr').find('.badge').removeClass('badge-danger badge-secondary').addClass('badge-success').text('已安装');
+                        
+                        // 2秒后刷新页面
+                        setTimeout(function() {
+                            location.reload();
+                        }, 2000);
+                    } else {
+                        $button.removeClass('btn-primary btn-outline-primary').addClass('btn-danger')
+                               .html('<i class="fas fa-times mr-1"></i>复制失败');
+                        
+                        // 显示错误提示
+                        $('.wizard-card').prepend(
+                            '<div class="alert alert-danger alert-dismissible fade show" role="alert">' +
+                            '<i class="fas fa-exclamation-circle mr-2"></i>复制字体 <strong>' + fontFile + '</strong> 失败: ' + response.message +
+                            '<button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>' +
+                            '</div>'
+                        );
+                        
+                        // 3秒后恢复按钮状态
+                        setTimeout(function() {
+                            $button.prop('disabled', false).removeClass('btn-danger').addClass('btn-outline-primary')
+                                   .html('<i class="fas fa-copy mr-1"></i>复制字体');
+                        }, 3000);
+                    }
+                },
+                error: function() {
+                    $button.removeClass('btn-primary btn-outline-primary').addClass('btn-danger')
+                           .html('<i class="fas fa-times mr-1"></i>请求失败');
+                    
+                    // 显示错误提示
+                    $('.wizard-card').prepend(
+                        '<div class="alert alert-danger alert-dismissible fade show" role="alert">' +
+                        '<i class="fas fa-exclamation-circle mr-2"></i>网络请求失败，请检查网络连接。' +
+                        '<button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>' +
+                        '</div>'
+                    );
+                    
+                    // 3秒后恢复按钮状态
+                    setTimeout(function() {
+                        $button.prop('disabled', false).removeClass('btn-danger').addClass('btn-outline-primary')
+                               .html('<i class="fas fa-copy mr-1"></i>复制字体');
+                    }, 3000);
+                }
+            });
+        });
+    });
+</script>
+{% endblock %} 

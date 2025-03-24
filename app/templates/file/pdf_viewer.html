@@ -1,0 +1,769 @@
+{% extends "base.html" %}
+
+{% block title %}查看PDF文件 - {{ file.original_filename }} - 自动化流程系统{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/pdfjs/web/viewer.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/file-viewer.css') }}">
+<style>
+#pdf-container {
+    width: 100%;
+    height: calc(100vh - 180px);
+    overflow: hidden;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-bottom: 15px;
+    position: relative;
+}
+.signature-box {
+    position: absolute;
+    background-color: rgba(255, 255, 255, 0.7);
+    border: 1px dashed #ccc;
+    padding: 5px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    z-index: 100;
+    cursor: move;
+}
+.signature-box img {
+    max-width: 100%;
+    max-height: 100%;
+}
+.signature-box .signature-text {
+    font-family: 'STKaiti', 'KaiTi', 'SimSun', serif;
+    margin-top: 5px;
+    text-align: center;
+    font-size: 14px;
+}
+.signature-box .signature-info {
+    font-size: 12px;
+    color: #666;
+    margin-top: 3px;
+}
+.signature-toolbar {
+    display: none;
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    z-index: 1000;
+}
+.signature-type-selector {
+    margin-bottom: 10px;
+}
+.signature-canvas-container {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    width: 300px;
+    height: 150px;
+    margin-bottom: 10px;
+    overflow: hidden;
+}
+#signature-canvas {
+    background-color: #fff;
+}
+.signature-actions {
+    display: flex;
+    justify-content: space-between;
+}
+#signatureModal .modal-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="row mb-3">
+        <div class="col">
+            <h4 class="mb-0">
+                <i class="bi bi-file-earmark-text me-2"></i>{{ file.original_filename }}
+            </h4>
+            <p class="text-muted mb-0">
+                <small>上传于: {{ file.created_at.strftime('%Y-%m-%d %H:%M') }} | 大小: {{ (file.file_size / 1024)|round(2) }} KB</small>
+            </p>
+        </div>
+        <div class="col-auto">
+            <div class="btn-group">
+                <a href="{{ url_for('file.download_file', id=file.id) }}" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-download me-1"></i>下载
+                </a>
+                
+                {% if can_print %}
+                <a href="{{ url_for('file.print_file', id=file.id) }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-printer me-1"></i>打印
+                </a>
+                {% endif %}
+                
+                {% if can_sign %}
+                <button type="button" class="btn btn-outline-success btn-sm" id="sign-btn">
+                    <i class="bi bi-pen me-1"></i>签署
+                </button>
+                {% endif %}
+                
+                {% if instance %}
+                <a href="{{ url_for('main.workflow_instance', id=instance.id) }}" class="btn btn-outline-info btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i>返回流程
+                </a>
+                {% else %}
+                <a href="{{ url_for('main.index') }}" class="btn btn-outline-info btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i>返回首页
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-9">
+            <div id="pdf-container">
+                <iframe src="{{ url_for('static', filename='vendor/pdfjs/web/viewer.html') }}?file={{ file_url|urlencode }}&username={{ current_user.username | urlencode }}&fullname={{ current_user.full_name | urlencode }}" 
+                        width="100%" height="100%" frameborder="0"></iframe>
+                        
+                <!-- 已有的签名 -->
+                {% for signature in signatures %}
+                <div class="signature-box" 
+                     style="left: {{ signature.position_x }}%; top: {{ signature.position_y }}%; page: {{ signature.page_num }};"
+                     data-page="{{ signature.page_num }}">
+                    {% if signature.signature_image %}
+                    <img src="{{ signature.signature_image }}" alt="签名">
+                    {% endif %}
+                    <div class="signature-text">{{ signature.signature_text }}</div>
+                    <div class="signature-info">
+                        {{ signature.user.full_name or signature.user.username }} - 
+                        {{ signature.signature_time.strftime('%Y-%m-%d %H:%M') }}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">文件信息</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>文件名</span>
+                            <span class="text-truncate" style="max-width: 200px;" title="{{ file.original_filename }}">{{ file.original_filename }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>文件类型</span>
+                            <span>{{ file.file_type|upper }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>文件大小</span>
+                            <span>{{ (file.file_size / 1024)|round(2) }} KB</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>上传者</span>
+                            <span>{{ file.creator.full_name or file.creator.username }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>上传时间</span>
+                            <span>{{ file.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- 签名历史 -->
+            <div class="card mt-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">签名记录</h5>
+                    <button class="btn btn-sm btn-outline-primary" id="refresh-signatures">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div id="signatures-container">
+                        {% if signatures %}
+                        <ul class="list-group list-group-flush">
+                            {% for signature in signatures %}
+                            <li class="list-group-item">
+                                <div class="d-flex justify-content-between">
+                                    <span>{{ signature.user.full_name or signature.user.username }}</span>
+                                    <span class="badge bg-primary">第{{ signature.page_num }}页</span>
+                                </div>
+                                <small class="text-muted">
+                                    {{ signature.signature_time.strftime('%Y-%m-%d %H:%M:%S') }}
+                                </small>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <div class="text-center p-3">
+                            <p class="text-muted">暂无签名记录</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 文件操作记录 -->
+            <div class="card mt-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">操作记录</h5>
+                    <button class="btn btn-sm btn-outline-primary" id="refresh-operations">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div id="operations-container">
+                        <div class="text-center p-3">
+                            <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                <span class="visually-hidden">加载中...</span>
+                            </div>
+                            <p class="text-muted mt-2">加载操作记录...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 签名工具栏 -->
+<div class="signature-toolbar" id="signature-toolbar">
+    <div class="signature-type-selector">
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="signatureType" id="signatureTypeText" value="text" checked>
+            <label class="form-check-label" for="signatureTypeText">文字签名</label>
+        </div>
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="signatureType" id="signatureTypeDraw" value="draw">
+            <label class="form-check-label" for="signatureTypeDraw">手写签名</label>
+        </div>
+    </div>
+    
+    <div id="text-signature-container">
+        <div class="mb-3">
+            <input type="text" class="form-control" id="signature-text" placeholder="请输入签名文字">
+        </div>
+    </div>
+    
+    <div id="draw-signature-container" style="display:none;">
+        <div class="signature-canvas-container">
+            <canvas id="signature-canvas" width="300" height="150"></canvas>
+        </div>
+        <div class="d-flex justify-content-between mb-3">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="clear-canvas">清除</button>
+            <div>
+                <button type="button" class="btn btn-sm btn-outline-dark" id="thin-line">细线</button>
+                <button type="button" class="btn btn-sm btn-outline-dark" id="medium-line">中线</button>
+                <button type="button" class="btn btn-sm btn-outline-dark" id="thick-line">粗线</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="signature-actions">
+        <button type="button" class="btn btn-secondary" id="cancel-signature">取消</button>
+        <button type="button" class="btn btn-primary" id="apply-signature">确认签名</button>
+    </div>
+</div>
+
+<!-- 签名成功Modal -->
+<div class="modal fade" id="signatureModal" tabindex="-1" aria-labelledby="signatureModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="signatureModalLabel">签名成功</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <i class="bi bi-check-circle-fill text-success" style="font-size: 3rem;"></i>
+                <p class="mt-3">文档已成功签署！</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">确定</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 获取操作记录
+    loadOperations();
+    
+    // 签名状态变量
+    let isSignMode = false;
+    let currentPage = 1;
+    let signatureBox = null;
+    
+    // 绘图变量
+    let canvas = document.getElementById('signature-canvas');
+    let ctx = canvas.getContext('2d');
+    let isDrawing = false;
+    let points = [];
+    let lineWidth = 2;
+    
+    // 设置默认样式
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'black';
+    ctx.lineWidth = lineWidth;
+    
+    // 签名按钮事件
+    document.getElementById('sign-btn').addEventListener('click', function() {
+        toggleSignMode();
+    });
+    
+    // 切换签名类型
+    document.querySelectorAll('input[name="signatureType"]').forEach(function(radio) {
+        radio.addEventListener('change', function() {
+            if (this.value === 'text') {
+                document.getElementById('text-signature-container').style.display = 'block';
+                document.getElementById('draw-signature-container').style.display = 'none';
+            } else {
+                document.getElementById('text-signature-container').style.display = 'none';
+                document.getElementById('draw-signature-container').style.display = 'block';
+                // 重置绘图区域
+                clearCanvas();
+            }
+        });
+    });
+    
+    // 线条粗细控制
+    document.getElementById('thin-line').addEventListener('click', function() {
+        lineWidth = 1;
+        ctx.lineWidth = lineWidth;
+    });
+    
+    document.getElementById('medium-line').addEventListener('click', function() {
+        lineWidth = 3;
+        ctx.lineWidth = lineWidth;
+    });
+    
+    document.getElementById('thick-line').addEventListener('click', function() {
+        lineWidth = 5;
+        ctx.lineWidth = lineWidth;
+    });
+    
+    // 清除画布
+    document.getElementById('clear-canvas').addEventListener('click', clearCanvas);
+    
+    // 取消签名
+    document.getElementById('cancel-signature').addEventListener('click', function() {
+        toggleSignMode(false);
+    });
+    
+    // 应用签名
+    document.getElementById('apply-signature').addEventListener('click', function() {
+        applySignature();
+    });
+    
+    // 刷新签名记录
+    document.getElementById('refresh-signatures').addEventListener('click', function() {
+        loadSignatures();
+    });
+    
+    // 刷新操作记录
+    document.getElementById('refresh-operations').addEventListener('click', function() {
+        loadOperations();
+    });
+    
+    // 添加绘图事件监听器
+    canvas.addEventListener('mousedown', startDrawing);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('mouseout', stopDrawing);
+    
+    // 触摸设备支持
+    canvas.addEventListener('touchstart', function(e) {
+        e.preventDefault();
+        let touch = e.touches[0];
+        let mouseEvent = new MouseEvent('mousedown', {
+            clientX: touch.clientX,
+            clientY: touch.clientY
+        });
+        canvas.dispatchEvent(mouseEvent);
+    }, false);
+    
+    canvas.addEventListener('touchmove', function(e) {
+        e.preventDefault();
+        let touch = e.touches[0];
+        let mouseEvent = new MouseEvent('mousemove', {
+            clientX: touch.clientX,
+            clientY: touch.clientY
+        });
+        canvas.dispatchEvent(mouseEvent);
+    }, false);
+    
+    canvas.addEventListener('touchend', function(e) {
+        e.preventDefault();
+        let mouseEvent = new MouseEvent('mouseup', {});
+        canvas.dispatchEvent(mouseEvent);
+    }, false);
+    
+    // 监听PDF浏览器的消息事件，获取当前页码
+    window.addEventListener('message', function(e) {
+        if (e.data && e.data.type === 'pagechange') {
+            currentPage = e.data.page;
+            
+            // 控制签名的显示隐藏
+            document.querySelectorAll('.signature-box').forEach(function(box) {
+                if (parseInt(box.dataset.page) === currentPage) {
+                    box.style.display = 'flex';
+                } else {
+                    box.style.display = 'none';
+                }
+            });
+        }
+    });
+    
+    // 功能函数
+    function toggleSignMode(enable = true) {
+        isSignMode = enable;
+        
+        if (enable) {
+            // 显示签名工具栏
+            document.getElementById('signature-toolbar').style.display = 'block';
+            
+            // 创建签名框
+            createSignatureBox();
+            
+            // 添加签名框拖动事件
+            makeSignatureBoxDraggable();
+        } else {
+            // 隐藏签名工具栏
+            document.getElementById('signature-toolbar').style.display = 'none';
+            
+            // 移除临时签名框
+            if (signatureBox) {
+                signatureBox.remove();
+                signatureBox = null;
+            }
+        }
+    }
+    
+    function createSignatureBox() {
+        if (signatureBox) {
+            signatureBox.remove();
+        }
+        
+        signatureBox = document.createElement('div');
+        signatureBox.className = 'signature-box';
+        signatureBox.style.left = '50%';
+        signatureBox.style.top = '50%';
+        signatureBox.style.transform = 'translate(-50%, -50%)';
+        signatureBox.style.width = '150px';
+        signatureBox.style.height = '80px';
+        signatureBox.dataset.page = currentPage;
+        
+        const textDiv = document.createElement('div');
+        textDiv.className = 'signature-text';
+        textDiv.textContent = '{{ current_user.full_name or current_user.username }}';
+        
+        signatureBox.appendChild(textDiv);
+        document.getElementById('pdf-container').appendChild(signatureBox);
+    }
+    
+    function makeSignatureBoxDraggable() {
+        if (!signatureBox) return;
+        
+        let isDragging = false;
+        let offsetX, offsetY;
+        
+        signatureBox.addEventListener('mousedown', function(e) {
+            isDragging = true;
+            offsetX = e.clientX - signatureBox.getBoundingClientRect().left;
+            offsetY = e.clientY - signatureBox.getBoundingClientRect().top;
+        });
+        
+        document.addEventListener('mousemove', function(e) {
+            if (!isDragging) return;
+            
+            const pdfContainer = document.getElementById('pdf-container');
+            const containerRect = pdfContainer.getBoundingClientRect();
+            
+            let left = e.clientX - containerRect.left - offsetX;
+            let top = e.clientY - containerRect.top - offsetY;
+            
+            // 限制在容器内
+            left = Math.max(0, Math.min(left, containerRect.width - signatureBox.offsetWidth));
+            top = Math.max(0, Math.min(top, containerRect.height - signatureBox.offsetHeight));
+            
+            // 设置位置为百分比
+            const leftPercent = (left / containerRect.width) * 100;
+            const topPercent = (top / containerRect.height) * 100;
+            
+            signatureBox.style.left = leftPercent + '%';
+            signatureBox.style.top = topPercent + '%';
+        });
+        
+        document.addEventListener('mouseup', function() {
+            isDragging = false;
+        });
+    }
+    
+    function startDrawing(e) {
+        isDrawing = true;
+        points = [];
+        
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        points.push({ x, y });
+        
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+    }
+    
+    function draw(e) {
+        if (!isDrawing) return;
+        
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        points.push({ x, y });
+        
+        // 绘制平滑曲线
+        if (points.length > 2) {
+            const lastPoint = points[points.length - 1];
+            const prevPoint = points[points.length - 2];
+            
+            // 使用贝塞尔曲线连接点，使线条更平滑
+            ctx.beginPath();
+            ctx.moveTo(prevPoint.x, prevPoint.y);
+            ctx.quadraticCurveTo(
+                prevPoint.x, prevPoint.y,
+                (lastPoint.x + prevPoint.x) / 2,
+                (lastPoint.y + prevPoint.y) / 2
+            );
+            ctx.stroke();
+        }
+    }
+    
+    function stopDrawing() {
+        isDrawing = false;
+    }
+    
+    function clearCanvas() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        points = [];
+    }
+    
+    function applySignature() {
+        if (!signatureBox) return;
+        
+        const signatureType = document.querySelector('input[name="signatureType"]:checked').value;
+        let signatureText = document.getElementById('signature-text').value;
+        let signatureImage = null;
+        
+        // 如果是手写签名，获取canvas图像
+        if (signatureType === 'draw') {
+            signatureImage = canvas.toDataURL('image/png');
+            // 空白检查 - 检查是否实际绘制了内容
+            if (isCanvasBlank()) {
+                alert('请先绘制签名再确认');
+                return;
+            }
+        } else {
+            // 文字签名
+            if (!signatureText) {
+                signatureText = '{{ current_user.full_name or current_user.username }}';
+            }
+        }
+        
+        // 更新签名框的内容
+        if (signatureType === 'text') {
+            if (signatureBox.querySelector('img')) {
+                signatureBox.querySelector('img').remove();
+            }
+            signatureBox.querySelector('.signature-text').textContent = signatureText;
+        } else {
+            // 添加图片签名
+            if (!signatureBox.querySelector('img')) {
+                const img = document.createElement('img');
+                signatureBox.insertBefore(img, signatureBox.querySelector('.signature-text'));
+            }
+            signatureBox.querySelector('img').src = signatureImage;
+        }
+        
+        // 获取签名位置
+        const containerRect = document.getElementById('pdf-container').getBoundingClientRect();
+        const boxRect = signatureBox.getBoundingClientRect();
+        
+        // 计算相对位置（百分比）
+        const positionX = parseFloat(signatureBox.style.left);
+        const positionY = parseFloat(signatureBox.style.top);
+        
+        // 发送签名请求
+        fetch('{{ url_for("file.sign_file", id=file.id) }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                position_x: positionX,
+                position_y: positionY,
+                page_num: currentPage,
+                signature_text: signatureText,
+                signature_image: signatureType === 'draw' ? signatureImage : null
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // 签名成功
+                toggleSignMode(false);
+                
+                // 添加签名信息
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'signature-info';
+                infoDiv.textContent = '{{ current_user.full_name or current_user.username }} - ' + 
+                                    new Date().toLocaleString();
+                
+                signatureBox.appendChild(infoDiv);
+                
+                // 显示成功弹窗
+                const modal = new bootstrap.Modal(document.getElementById('signatureModal'));
+                modal.show();
+                
+                // 刷新签名记录
+                loadSignatures();
+            } else {
+                alert('签名失败: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('签名失败，请重试');
+        });
+    }
+    
+    function isCanvasBlank() {
+        const pixelBuffer = new Uint32Array(
+            ctx.getImageData(0, 0, canvas.width, canvas.height).data.buffer
+        );
+        return !pixelBuffer.some(color => color !== 0);
+    }
+    
+    function loadSignatures() {
+        fetch('{{ url_for("file.get_file_signatures", id=file.id) }}')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateSignaturesList(data.data);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading signatures:', error);
+            });
+    }
+    
+    function updateSignaturesList(signatures) {
+        const container = document.getElementById('signatures-container');
+        
+        if (signatures.length === 0) {
+            container.innerHTML = `
+                <div class="text-center p-3">
+                    <p class="text-muted">暂无签名记录</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '<ul class="list-group list-group-flush">';
+        
+        signatures.forEach(signature => {
+            const date = new Date(signature.signature_time);
+            html += `
+                <li class="list-group-item">
+                    <div class="d-flex justify-content-between">
+                        <span>${signature.user.full_name || signature.user.username}</span>
+                        <span class="badge bg-primary">第${signature.page_num}页</span>
+                    </div>
+                    <small class="text-muted">
+                        ${date.toLocaleString()}
+                    </small>
+                </li>
+            `;
+        });
+        
+        html += '</ul>';
+        container.innerHTML = html;
+    }
+    
+    function loadOperations() {
+        fetch('{{ url_for("file.get_file_operations", id=file.id) }}')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateOperationsList(data.data);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading operations:', error);
+                document.getElementById('operations-container').innerHTML = `
+                    <div class="text-center p-3">
+                        <p class="text-danger">加载失败，请重试</p>
+                    </div>
+                `;
+            });
+    }
+    
+    function updateOperationsList(operations) {
+        const container = document.getElementById('operations-container');
+        
+        if (operations.length === 0) {
+            container.innerHTML = `
+                <div class="text-center p-3">
+                    <p class="text-muted">暂无操作记录</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '<ul class="list-group list-group-flush">';
+        
+        operations.forEach(operation => {
+            const date = new Date(operation.operation_time);
+            let operationType = '';
+            
+            switch(operation.operation_type) {
+                case 'upload': operationType = '上传'; break;
+                case 'view': operationType = '查看'; break;
+                case 'edit': operationType = '编辑'; break;
+                case 'sign': operationType = '签署'; break;
+                case 'delete': operationType = '删除'; break;
+                case 'print': operationType = '打印'; break;
+                default: operationType = operation.operation_type;
+            }
+            
+            html += `
+                <li class="list-group-item">
+                    <div class="d-flex justify-content-between">
+                        <span>${operation.user.full_name || operation.user.username}</span>
+                        <span class="badge bg-info">${operationType}</span>
+                    </div>
+                    <small class="text-muted">
+                        ${date.toLocaleString()}
+                    </small>
+                </li>
+            `;
+        });
+        
+        html += '</ul>';
+        container.innerHTML = html;
+    }
+});
+</script>
+{% endblock %} 

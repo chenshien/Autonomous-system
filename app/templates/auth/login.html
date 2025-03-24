@@ -1,0 +1,261 @@
+{% extends 'base.html' %}
+
+{% block title %}登录 - 自动化流程系统{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<style>
+.login-card {
+    max-width: 450px;
+    margin: 40px auto;
+    border-radius: 10px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+.login-header {
+    text-align: center;
+    padding: 30px 0 10px;
+}
+.login-logo {
+    width: 80px;
+    height: 80px;
+    margin-bottom: 20px;
+}
+.login-title {
+    font-size: 26px;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+.login-subtitle {
+    color: #6c757d;
+    margin-bottom: 20px;
+}
+.login-form {
+    padding: 20px 30px 30px;
+}
+.form-group {
+    margin-bottom: 20px;
+}
+.form-label {
+    font-weight: 500;
+}
+.captcha-container {
+    display: flex;
+    align-items: center;
+}
+.captcha-image {
+    height: 38px;
+    border-radius: 4px;
+    margin-left: 10px;
+    cursor: pointer;
+}
+.captcha-refresh {
+    margin-left: 10px;
+    cursor: pointer;
+    color: #6c757d;
+}
+.captcha-refresh:hover {
+    color: #495057;
+}
+.login-footer {
+    border-top: 1px solid #eee;
+    padding: 15px 30px;
+    text-align: center;
+    font-size: 14px;
+    color: #6c757d;
+}
+.login-options {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+.auth-divider {
+    text-align: center;
+    position: relative;
+    margin: 25px 0;
+}
+.auth-divider::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background-color: #e9ecef;
+    z-index: 1;
+}
+.auth-divider span {
+    position: relative;
+    z-index: 2;
+    background-color: #fff;
+    padding: 0 15px;
+    color: #6c757d;
+}
+.social-login {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+.social-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+.social-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 10px rgba(0, 0, 0, 0.1);
+}
+.social-btn-wechat {
+    background-color: #2dc100;
+}
+.social-btn-dingtalk {
+    background-color: #1da1f2;
+}
+.social-btn-ldap {
+    background-color: #ea4335;
+}
+.register-hint {
+    text-align: center;
+    margin-top: 10px;
+}
+.login-alert {
+    margin-bottom: 20px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="card login-card">
+        <div class="login-header">
+            <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo" class="login-logo">
+            <h1 class="login-title">自动化流程系统</h1>
+            <p class="login-subtitle">企业级流程管理与自动化平台</p>
+        </div>
+        
+        <div class="login-form">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} login-alert" role="alert">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <form method="POST" action="{{ url_for('auth.login') }}">
+                {{ form.csrf_token }}
+                
+                <div class="form-group">
+                    {{ form.username.label(class="form-label") }}
+                    {{ form.username(class="form-control", placeholder="请输入用户名") }}
+                    {% if form.username.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.username.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <div class="form-group">
+                    {{ form.password.label(class="form-label") }}
+                    {{ form.password(class="form-control", placeholder="请输入密码") }}
+                    {% if form.password.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.password.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <div class="form-group">
+                    {{ form.captcha.label(class="form-label") }}
+                    <div class="captcha-container">
+                        {{ form.captcha(class="form-control", placeholder="请输入验证码", style="flex: 1") }}
+                        <img src="{{ captcha_url }}" alt="验证码" class="captcha-image" id="captcha-image" title="点击刷新验证码">
+                        <i class="bi bi-arrow-clockwise captcha-refresh" id="refresh-captcha" title="刷新验证码"></i>
+                    </div>
+                    {% if form.captcha.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.captcha.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <div class="login-options">
+                    <div class="form-check">
+                        {{ form.remember_me(class="form-check-input") }}
+                        {{ form.remember_me.label(class="form-check-label") }}
+                    </div>
+                    <div>
+                        <a href="{{ url_for('auth.reset_password_request') }}" class="text-decoration-none">忘记密码?</a>
+                    </div>
+                </div>
+                
+                {{ form.submit(class="btn btn-primary w-100") }}
+            </form>
+            
+            <div class="auth-divider">
+                <span>或使用以下方式登录</span>
+            </div>
+            
+            <div class="social-login">
+                <a href="{{ url_for('auth.wechat_login') }}" class="social-btn social-btn-wechat" title="微信登录">
+                    <i class="bi bi-wechat"></i>
+                </a>
+                <a href="{{ url_for('auth.dingtalk_login') }}" class="social-btn social-btn-dingtalk" title="钉钉登录">
+                    <i class="bi bi-chat-dots-fill"></i>
+                </a>
+                <a href="{{ url_for('auth.ldap_login') }}" class="social-btn social-btn-ldap" title="LDAP登录">
+                    <i class="bi bi-person-vcard-fill"></i>
+                </a>
+            </div>
+            
+            <div class="register-hint">
+                <span>还没有账号?</span>
+                <a href="{{ url_for('auth.register') }}" class="text-decoration-none">立即注册</a>
+            </div>
+        </div>
+        
+        <div class="login-footer">
+            &copy; {{ current_year }} 自动化流程系统 - 版权所有
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 验证码刷新
+        const refreshCaptcha = function() {
+            fetch('{{ url_for("auth.captcha") }}')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('captcha-image').src = data.captcha_url;
+                    document.getElementById('captcha').value = '';
+                })
+                .catch(error => console.error('Error refreshing captcha:', error));
+        };
+        
+        // 点击验证码图片刷新
+        document.getElementById('captcha-image').addEventListener('click', refreshCaptcha);
+        
+        // 点击刷新按钮刷新验证码
+        document.getElementById('refresh-captcha').addEventListener('click', refreshCaptcha);
+    });
+</script>
+{% endblock %} 

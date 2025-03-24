@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+
+{% block title %}首页 - 自动化流程系统{% endblock %}
+
+{% block content %}
+<div class="container-fluid" id="app">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body p-4">
+                    <h2 class="mb-3">欢迎回来，{{ current_user.fullname }}</h2>
+                    <p class="text-muted">今天是 {{ current_date.strftime('%Y年%m月%d日') }}，星期{{ weekday_names[current_date.weekday()] }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- 待办任务卡片 -->
+        <div class="col-md-6 col-lg-3 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-check2-square text-primary me-2"></i>待办任务</span>
+                    <a href="{{ url_for('main.my_tasks') }}" class="text-muted"><i class="bi bi-arrow-right"></i></a>
+                </div>
+                <div class="card-body">
+                    <h3 class="display-4 text-center mb-3">${ pendingTasks }</h3>
+                    <div class="d-grid">
+                        <a href="{{ url_for('main.my_tasks') }}" class="btn btn-outline-primary">查看待办任务</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 我的申请卡片 -->
+        <div class="col-md-6 col-lg-3 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-file-earmark-text text-success me-2"></i>我的申请</span>
+                    <a href="{{ url_for('main.my_submissions') }}" class="text-muted"><i class="bi bi-arrow-right"></i></a>
+                </div>
+                <div class="card-body">
+                    <h3 class="display-4 text-center mb-3">${ mySubmissions }</h3>
+                    <div class="d-grid">
+                        <a href="{{ url_for('main.my_submissions') }}" class="btn btn-outline-success">查看我的申请</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 流程模板卡片 -->
+        <div class="col-md-6 col-lg-3 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-diagram-3 text-info me-2"></i>流程模板</span>
+                    <a href="{{ url_for('main.workflows') }}" class="text-muted"><i class="bi bi-arrow-right"></i></a>
+                </div>
+                <div class="card-body">
+                    <h3 class="display-4 text-center mb-3">${ workflows }</h3>
+                    <div class="d-grid">
+                        <a href="{{ url_for('main.workflows') }}" class="btn btn-outline-info">查看流程模板</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 系统公告卡片 -->
+        <div class="col-md-6 col-lg-3 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-megaphone text-warning me-2"></i>系统公告</span>
+                </div>
+                <div class="card-body">
+                    <div v-if="announcements.length > 0">
+                        <div v-for="announcement in announcements" class="mb-2 pb-2 border-bottom">
+                            <h6 class="mb-1">${ announcement.title }</h6>
+                            <p class="small text-muted mb-0">${ announcement.date }</p>
+                        </div>
+                    </div>
+                    <div v-else class="text-center text-muted py-4">
+                        <i class="bi bi-info-circle fs-1"></i>
+                        <p class="mt-2">暂无系统公告</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- 近期活动 -->
+        <div class="col-md-8 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-activity text-danger me-2"></i>近期活动
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush" v-if="recentActivities.length > 0">
+                        <div v-for="activity in recentActivities" class="list-group-item">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">${ activity.title }</h6>
+                                <small class="text-muted">${ activity.time }</small>
+                            </div>
+                            <p class="mb-1">${ activity.description }</p>
+                            <small class="text-muted">${ activity.status }</small>
+                        </div>
+                    </div>
+                    <div v-else class="text-center text-muted py-4">
+                        <i class="bi bi-info-circle fs-1"></i>
+                        <p class="mt-2">暂无近期活动</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 快速操作 -->
+        <div class="col-md-4 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-lightning text-primary me-2"></i>快速操作
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        <a href="{{ url_for('main.new_workflow_instance') }}" class="list-group-item list-group-item-action">
+                            <i class="bi bi-plus-circle me-2"></i>新建流程
+                        </a>
+                        <a href="{{ url_for('main.my_tasks') }}" class="list-group-item list-group-item-action">
+                            <i class="bi bi-check2-square me-2"></i>处理任务
+                        </a>
+                        <a href="{{ url_for('user.profile') }}" class="list-group-item list-group-item-action">
+                            <i class="bi bi-person me-2"></i>更新个人资料
+                        </a>
+                        {% if current_user.is_admin %}
+                        <a href="{{ url_for('admin.users') }}" class="list-group-item list-group-item-action">
+                            <i class="bi bi-people me-2"></i>管理用户
+                        </a>
+                        <a href="{{ url_for('admin.system_logs') }}" class="list-group-item list-group-item-action">
+                            <i class="bi bi-file-earmark-text me-2"></i>查看系统日志
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    new Vue({
+        el: '#app',
+        delimiters: ['${', '}'],
+        data: {
+            pendingTasks: 0,
+            mySubmissions: 0,
+            workflows: 0,
+            announcements: [],
+            recentActivities: []
+        },
+        created() {
+            this.loadDashboardData();
+        },
+        methods: {
+            loadDashboardData() {
+                // 获取仪表板数据
+                axios.get('/api/user/dashboard')
+                    .then(response => {
+                        const data = response.data;
+                        this.pendingTasks = data.pending_tasks;
+                        this.mySubmissions = data.my_submissions;
+                        this.workflows = data.workflows;
+                        this.announcements = data.announcements;
+                        this.recentActivities = data.recent_activities;
+                    })
+                    .catch(error => {
+                        console.error('获取仪表板数据失败:', error);
+                    });
+            }
+        }
+    });
+</script>
+{% endblock %} 

@@ -1,0 +1,106 @@
+/* 自动生成的字体CSS文件 */
+/* 生成时间: 2025-03-22 17:54:32 */
+
+/* Chinese 字体 */
+@font-face {
+  font-family: 'SimSun';
+  src: url('/static/fonts/simsun.ttc') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SimHei';
+  src: url('/static/fonts/simhei.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Microsoft YaHei';
+  src: url('/static/fonts/msyh.ttc') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+
+/* English 字体 */
+@font-face {
+  font-family: 'Arial';
+  src: url('/static/fonts/arial.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Times New Roman';
+  src: url('/static/fonts/times.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+
+/* Monospace 字体 */
+@font-face {
+  font-family: 'Courier New';
+  src: url('/static/fonts/cour.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/static/fonts/JetBrainsMono-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+
+/* Symbol 字体 */
+@font-face {
+  font-family: 'Symbol';
+  src: url('/static/fonts/symbol.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+
+/* 便捷字体类 */
+.font-chinese { 
+  font-family: 'SimSun', 'SimHei', 'Microsoft YaHei', sans-serif; 
+}
+.font-english { 
+  font-family: 'Arial', 'Times New Roman', sans-serif; 
+}
+.font-symbol { 
+  font-family: 'Symbol', sans-serif; 
+}
+.font-monospace { 
+  font-family: 'Courier New', 'JetBrains Mono'; 
+}
+.font-math { 
+  font-family: serif, serif; 
+}
+
+/* 全局字体设置 */
+body {
+  font-family: 'SimSun', 'SimHei', 'Arial', sans-serif;
+}
+
+/* 数学公式样式 */
+.math-formula {
+  font-family: serif, serif;
+}
+
+/* 代码样式 */
+pre, code {
+  font-family: Consolas, monospace;
+}

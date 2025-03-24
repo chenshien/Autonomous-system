@@ -1,0 +1,160 @@
+{% extends "wizard/layout.html" %}
+{% set title = "系统检查" %}
+
+{% block content %}
+<h2 class="mb-4"><i class="fas fa-laptop-code mr-2"></i>系统环境检查</h2>
+<p class="lead mb-4">
+    系统将检查您的计算机环境是否满足运行要求，并验证必要的组件是否已正确安装。
+</p>
+
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="fas fa-info-circle mr-2"></i>系统信息</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        操作系统
+                        <span class="badge badge-primary badge-pill">{{ system_info.os }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Python版本
+                        <span class="badge badge-primary badge-pill">{{ system_info.python }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        处理器
+                        <span class="badge badge-primary badge-pill">{{ system_info.cpu }}</span>
+                    </li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        内存
+                        <span class="badge badge-primary badge-pill">{{ system_info.memory }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        磁盘空间
+                        <span class="badge badge-primary badge-pill">{{ system_info.disk }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        可用空间
+                        <span class="badge badge-primary badge-pill">{{ system_info.free_disk }}</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0"><i class="fas fa-box mr-2"></i>依赖库检查</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>库名称</th>
+                        <th>版本</th>
+                        <th>状态</th>
+                        <th>必需</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for name, info in dependencies.items() %}
+                    <tr>
+                        <td>{{ name }}</td>
+                        <td>{{ info.version if info.status == 'ok' else '-' }}</td>
+                        <td>
+                            {% if info.status == 'ok' %}
+                            <span class="badge badge-success">已安装</span>
+                            {% else %}
+                            <span class="badge badge-danger">未安装</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if info.required %}
+                            <span class="badge badge-primary">必需</span>
+                            {% else %}
+                            <span class="badge badge-secondary">可选</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="fas fa-folder mr-2"></i>目录权限检查</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>目录名称</th>
+                        <th>路径</th>
+                        <th>状态</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for name, info in directories.items() %}
+                    <tr>
+                        <td>{{ name }}</td>
+                        <td><code>{{ info.path }}</code></td>
+                        <td>
+                            {% if info.writable %}
+                            <span class="badge badge-success">可写</span>
+                            {% else %}
+                            <span class="badge badge-danger">不可写</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="alert alert-info">
+    <i class="fas fa-lightbulb mr-2"></i>提示：如果您遇到权限问题，请确保应用程序对相关目录具有读写权限。
+</div>
+
+<form method="post" action="{{ url_for('wizard.step', step='system_check') }}">
+    <div class="d-flex justify-content-between mt-4">
+        <a href="{{ url_for('wizard.step', step='welcome') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left mr-2"></i>返回
+        </a>
+        <button type="submit" class="btn btn-primary">
+            下一步<i class="fas fa-arrow-right ml-2"></i>
+        </button>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        // 检查必要的依赖是否都已安装
+        var requiredDependencies = $('.badge-primary').closest('tr').find('.badge-danger');
+        if (requiredDependencies.length > 0) {
+            $('.alert-info').after('<div class="alert alert-danger mt-3"><i class="fas fa-exclamation-triangle mr-2"></i>警告：有必需的依赖库未安装，这可能会导致系统无法正常运行。</div>');
+        }
+        
+        // 检查目录权限
+        var inaccessibleDirs = $('.badge-danger:contains("不可写")');
+        if (inaccessibleDirs.length > 0) {
+            $('.alert-info').after('<div class="alert alert-warning mt-3"><i class="fas fa-exclamation-circle mr-2"></i>警告：某些目录没有写入权限，这可能会影响系统功能。</div>');
+        }
+    });
+</script>
+{% endblock %} 

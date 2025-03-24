@@ -1,0 +1,184 @@
+{% extends 'base.html' %}
+
+{% block title %}打印文件 - {{ file.original_filename }}{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<style>
+    .print-container {
+        margin: 20px auto;
+    }
+    .print-header {
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .print-actions {
+        display: flex;
+        gap: 10px;
+    }
+    .print-content {
+        width: 100%;
+        min-height: 800px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background-color: #fff;
+        position: relative;
+        overflow: hidden;
+    }
+    .print-frame {
+        width: 100%;
+        height: 800px;
+        border: none;
+    }
+    .watermark-notice {
+        font-size: 13px;
+        color: #666;
+        margin-top: 10px;
+        padding: 10px;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        border-left: 3px solid #17a2b8;
+    }
+    /* 水印样式 */
+    .watermark-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 100;
+    }
+    .watermark {
+        position: absolute;
+        transform: rotate(-45deg);
+        font-size: 16px;
+        opacity: 0.2;
+        color: #000;
+        pointer-events: none;
+        white-space: nowrap;
+    }
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+        }
+        .print-frame {
+            height: 100%;
+        }
+        .print-content {
+            border: none;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container print-container">
+    <div class="print-header no-print">
+        <div>
+            <h4>打印文件：{{ file.original_filename }}</h4>
+            <p class="text-muted">文件类型：{{ file.file_type.upper() }}，大小：{{ (file.file_size / 1024) | round(2) }} KB</p>
+        </div>
+        <div class="print-actions">
+            <button class="btn btn-primary" onclick="printDocument()">
+                <i class="bi bi-printer"></i> 打印文档
+            </button>
+            <a href="{{ url_for('file.view_file', id=file.id) }}" class="btn btn-outline-secondary">
+                <i class="bi bi-eye"></i> 返回预览
+            </a>
+        </div>
+    </div>
+    
+    <div class="alert alert-info no-print">
+        <i class="bi bi-info-circle-fill me-2"></i>
+        点击"打印文档"按钮将通过系统打印对话框打印此文档。打印的文档将包含水印信息，用于跟踪文档来源。
+    </div>
+
+    <div class="watermark-notice no-print">
+        <i class="bi bi-shield-lock me-2"></i>
+        文档带有水印 "克分行在线流程系统 {{ current_user.username }} {{ current_user.full_name }} 和当前时间"，用于文档溯源和安全保障。
+    </div>
+    
+    <div class="alert alert-warning no-print">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        此类型文件可能无法直接打印，如果无法正常打印，请下载文件后使用合适的软件打印。
+    </div>
+    
+    <div class="print-content">
+        <iframe src="{{ file_url }}" class="print-frame" id="fileFrame"></iframe>
+        <div class="watermark-container" id="watermark-container"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    // 创建水印
+    function createWatermark() {
+        const container = document.getElementById('watermark-container');
+        const username = '{{ current_user.username }}';
+        const fullname = '{{ current_user.full_name }}';
+        const date = new Date().toLocaleString();
+        const watermarkText = `克分行在线流程系统 ${username} ${fullname} ${date}`;
+        
+        // 计算需要多少水印才能覆盖整个页面
+        const containerWidth = container.offsetWidth;
+        const containerHeight = container.offsetHeight;
+        const diagonal = Math.sqrt(containerWidth * containerWidth + containerHeight * containerHeight);
+        const watermarkWidth = diagonal / 3; // 对角线长度的三分之一作为水印宽度
+        
+        // 横向和纵向都多添加几个水印确保覆盖
+        for (let i = -watermarkWidth; i < containerWidth + watermarkWidth; i += watermarkWidth) {
+            for (let j = -watermarkWidth; j < containerHeight + watermarkWidth; j += watermarkWidth) {
+                const watermark = document.createElement('div');
+                watermark.className = 'watermark';
+                watermark.textContent = watermarkText;
+                watermark.style.left = `${i}px`;
+                watermark.style.top = `${j}px`;
+                container.appendChild(watermark);
+            }
+        }
+    }
+    
+    function printDocument() {
+        try {
+            // 尝试使用iframe的内容进行打印
+            const iframe = document.getElementById('fileFrame');
+            iframe.contentWindow.print();
+        } catch (e) {
+            console.error('打印失败:', e);
+            
+            // 备用方法：使用浏览器打印功能
+            window.print();
+        }
+    }
+    
+    // 禁止右键菜单，防止下载
+    document.getElementById('fileFrame').oncontextmenu = function(e) {
+        e.preventDefault();
+        return false;
+    };
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        // 创建水印
+        createWatermark();
+        
+        // 添加键盘快捷键
+        document.addEventListener('keydown', function(e) {
+            // Ctrl+P 快捷键
+            if (e.ctrlKey && e.key === 'p') {
+                e.preventDefault();
+                printDocument();
+                return false;
+            }
+        });
+    });
+</script>
+{% endblock %} 

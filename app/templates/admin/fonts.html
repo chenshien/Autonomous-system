@@ -1,0 +1,454 @@
+{% extends "base.html" %}
+{% block title %}字体资源管理{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
+<style>
+  .font-card {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 15px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,.1);
+    transition: all 0.3s ease;
+  }
+  .font-card:hover {
+    box-shadow: 0 4px 8px rgba(0,0,0,.15);
+  }
+  .font-title {
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .font-name {
+    font-size: 1.2rem;
+    font-weight: bold;
+  }
+  .font-badge {
+    font-size: 0.8rem;
+    padding: 3px 8px;
+    border-radius: 10px;
+    background-color: #e9ecef;
+  }
+  .font-badge.available {
+    background-color: #d4edda;
+    color: #155724;
+  }
+  .font-badge.missing {
+    background-color: #f8d7da;
+    color: #721c24;
+  }
+  .font-preview {
+    padding: 10px;
+    margin: 10px 0;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    border: 1px solid #eee;
+    min-height: 100px;
+  }
+  .preview-multilingual {
+    font-size: 1.1rem;
+    line-height: 1.5;
+  }
+  .preview-symbols {
+    font-size: 1.5rem;
+    letter-spacing: 5px;
+  }
+  .preview-size-small {
+    font-size: 0.9rem;
+  }
+  .preview-size-medium {
+    font-size: 1.2rem;
+  }
+  .preview-size-large {
+    font-size: 1.5rem;
+  }
+  .tab-content {
+    padding-top: 20px;
+  }
+  .font-stats {
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+  }
+  .font-actions {
+    margin-top: 10px;
+  }
+  #downloadProgress {
+    margin-top: 20px;
+    display: none;
+  }
+  .loading-spinner {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid rgba(0, 0, 0, 0.2);
+    border-top-color: #007bff;
+    border-radius: 50%;
+    animation: spinner 1s linear infinite;
+  }
+  @keyframes spinner {
+    to {transform: rotate(360deg);}
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+  <h1 class="mt-4 mb-4">字体资源管理</h1>
+  
+  <div class="font-stats card">
+    <div class="card-body">
+      <h4>系统字体状态</h4>
+      <div class="row">
+        <div class="col-md-4">
+          <div class="card bg-light">
+            <div class="card-body text-center">
+              <h3 id="totalFonts">{{ get_fonts()|length }}</h3>
+              <p class="mb-0">总字体数量</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card bg-success text-white">
+            <div class="card-body text-center">
+              <h3 id="availableFonts">{{ get_fonts()|selectattr('available', 'equalto', true)|list|length }}</h3>
+              <p class="mb-0">可用字体数量</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card bg-danger text-white">
+            <div class="card-body text-center">
+              <h3 id="missingFonts">{{ get_fonts()|selectattr('available', 'equalto', false)|list|length }}</h3>
+              <p class="mb-0">缺失字体数量</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="font-actions mt-3">
+        <button id="downloadAllBtn" class="btn btn-primary">下载所有字体</button>
+        <button id="generateCssBtn" class="btn btn-success">生成字体CSS</button>
+        <div id="downloadProgress" class="mt-3">
+          <div class="progress">
+            <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+          </div>
+          <p id="downloadStatus" class="mt-2">正在初始化下载...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <ul class="nav nav-tabs" id="fontTabs" role="tablist">
+    <li class="nav-item">
+      <a class="nav-link active" id="all-tab" data-toggle="tab" href="#all" role="tab">所有字体</a>
+    </li>
+    {% for category in get_font_categories() %}
+    <li class="nav-item">
+      <a class="nav-link" id="{{ category }}-tab" data-toggle="tab" href="#{{ category }}" role="tab">{{ category|capitalize }}</a>
+    </li>
+    {% endfor %}
+  </ul>
+  
+  <div class="tab-content" id="fontTabsContent">
+    <div class="tab-pane fade show active" id="all" role="tabpanel">
+      <div class="row">
+        {% for font in get_fonts() %}
+        <div class="col-md-6">
+          <div class="font-card">
+            <div class="font-title">
+              <span class="font-name">{{ font.name }}</span>
+              {% if font.available %}
+              <span class="font-badge available">可用</span>
+              {% else %}
+              <span class="font-badge missing">缺失</span>
+              {% endif %}
+            </div>
+            <div>
+              <p><strong>分类：</strong> {{ font.category|capitalize }}</p>
+              <p><strong>文件：</strong> {{ font.file }}</p>
+              <p><strong>说明：</strong> {{ font.desc }}</p>
+            </div>
+            {% if font.available %}
+            <div class="font-preview" style="font-family: '{{ font.name }}';">
+              <div class="preview-size-small">
+                中文示例：迎来春色换人间 万紫千红总是春 现代汉语示例文本
+              </div>
+              <div class="preview-size-medium">
+                English Example: The quick brown fox jumps over the lazy dog.
+              </div>
+              <div class="preview-size-large">
+                数字/符号: 0123456789 !@#$%^&*()_+-=[]{}|;:'",.<>/?
+              </div>
+            </div>
+            {% else %}
+            <div class="font-actions">
+              <button class="btn btn-sm btn-primary download-font-btn" data-font="{{ font.file }}">下载此字体</button>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    
+    {% for category in get_font_categories() %}
+    <div class="tab-pane fade" id="{{ category }}" role="tabpanel">
+      <div class="row">
+        {% for font in get_fonts(category) %}
+        <div class="col-md-6">
+          <div class="font-card">
+            <div class="font-title">
+              <span class="font-name">{{ font.name }}</span>
+              {% if font.available %}
+              <span class="font-badge available">可用</span>
+              {% else %}
+              <span class="font-badge missing">缺失</span>
+              {% endif %}
+            </div>
+            <div>
+              <p><strong>文件：</strong> {{ font.file }}</p>
+              <p><strong>说明：</strong> {{ font.desc }}</p>
+            </div>
+            {% if font.available %}
+            <div class="font-preview" style="font-family: '{{ font.name }}';">
+              {% if category == 'chinese' or category == 'multilingual' %}
+              <div class="preview-multilingual">
+                中文示例：迎来春色换人间 万紫千红总是春 现代汉语示例文本
+              </div>
+              {% elif category == 'japanese' %}
+              <div class="preview-multilingual">
+                日本語サンプル：春の色は変わり、千紅万紫は総て春である
+              </div>
+              {% elif category == 'korean' %}
+              <div class="preview-multilingual">
+                한국어 예：봄색이 인간 세계를 바꾸니 온갖 꽃은 모두 봄이로다
+              </div>
+              {% endif %}
+              <div class="preview-multilingual">
+                English Example: The quick brown fox jumps over the lazy dog.
+              </div>
+              {% if category == 'math' %}
+              <div class="preview-symbols">
+                ∑∏∫∂√∞≠≈≤≥±÷×∈∉⊂⊃⊆⊇∪∩¬∧∨∃∀
+              </div>
+              {% elif category == 'symbol' %}
+              <div class="preview-symbols">
+                ☺☻♥♦♣♠•◘○◙♂♀♪♫☼►◄↕‼¶§▬↨↑↓→←∟↔▲▼
+              </div>
+              {% endif %}
+              <div class="preview-multilingual">
+                数字/符号: 0123456789 !@#$%^&*()_+-=[]{}|;:'",.<>/?
+              </div>
+            </div>
+            {% else %}
+            <div class="font-actions">
+              <button class="btn btn-sm btn-primary download-font-btn" data-font="{{ font.file }}">下载此字体</button>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  
+  <!-- 字体测试区域 -->
+  <div class="card mt-4 mb-4">
+    <div class="card-header">
+      <h4>字体测试区域</h4>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label for="fontSelect">选择字体:</label>
+        <select class="form-control" id="fontSelect">
+          <option value="">-- 请选择字体 --</option>
+          {% for font in get_fonts()|selectattr('available', 'equalto', true)|list %}
+          <option value="{{ font.name }}">{{ font.name }} ({{ font.category }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="testText">输入测试文本:</label>
+        <textarea class="form-control" id="testText" rows="3">这是中文测试文本 This is English 数字123 符号@#¥%…—+</textarea>
+      </div>
+      <div class="form-group">
+        <label for="fontSize">字体大小:</label>
+        <input type="range" class="custom-range" id="fontSize" min="12" max="72" value="24">
+        <span id="fontSizeValue">24px</span>
+      </div>
+      <div class="mt-3">
+        <p>测试结果预览:</p>
+        <div id="previewArea" class="p-3 bg-light border" style="min-height: 100px; font-size: 24px;">
+          输入测试文本、选择字体后在此处预览效果
+        </div>
+      </div>
+    </div>
+  </div>
+  
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  $(document).ready(function() {
+    // 字体测试功能
+    $('#fontSelect').change(function() {
+      updatePreview();
+    });
+    
+    $('#testText').on('input', function() {
+      updatePreview();
+    });
+    
+    $('#fontSize').on('input', function() {
+      $('#fontSizeValue').text($(this).val() + 'px');
+      updatePreview();
+    });
+    
+    function updatePreview() {
+      var fontFamily = $('#fontSelect').val();
+      var testText = $('#testText').val();
+      var fontSize = $('#fontSize').val() + 'px';
+      
+      if (fontFamily) {
+        $('#previewArea').css('font-family', fontFamily);
+      } else {
+        $('#previewArea').css('font-family', '');
+      }
+      
+      $('#previewArea').css('font-size', fontSize);
+      
+      if (testText) {
+        $('#previewArea').text(testText);
+      } else {
+        $('#previewArea').text('请在上方输入测试文本');
+      }
+    }
+    
+    // 下载按钮功能
+    $('.download-font-btn').click(function() {
+      var fontFile = $(this).data('font');
+      downloadFont(fontFile);
+    });
+    
+    $('#downloadAllBtn').click(function() {
+      downloadAllFonts();
+    });
+    
+    $('#generateCssBtn').click(function() {
+      generateCss();
+    });
+    
+    function downloadFont(fontFile) {
+      $('#downloadStatus').text('正在下载: ' + fontFile);
+      $('#downloadProgress').show();
+      $('#progressBar').css('width', '50%');
+      
+      $.ajax({
+        url: '/admin/fonts/download',
+        method: 'POST',
+        data: JSON.stringify({ 'font_file': fontFile }),
+        contentType: 'application/json',
+        success: function(response) {
+          if (response.success) {
+            $('#downloadStatus').text('下载成功: ' + fontFile);
+            $('#progressBar').css('width', '100%').removeClass('bg-danger').addClass('bg-success');
+            setTimeout(function() {
+              window.location.reload();
+            }, 1000);
+          } else {
+            $('#downloadStatus').text('下载失败: ' + response.message);
+            $('#progressBar').css('width', '100%').removeClass('bg-success').addClass('bg-danger');
+          }
+        },
+        error: function() {
+          $('#downloadStatus').text('下载请求失败，请重试');
+          $('#progressBar').css('width', '100%').removeClass('bg-success').addClass('bg-danger');
+        }
+      });
+    }
+    
+    function downloadAllFonts() {
+      $('#downloadStatus').text('正在准备下载所有字体资源...');
+      $('#downloadProgress').show();
+      $('#progressBar').css('width', '10%').removeClass('bg-danger').addClass('bg-primary');
+      
+      $.ajax({
+        url: '/admin/fonts/download-all',
+        method: 'POST',
+        contentType: 'application/json',
+        success: function(response) {
+          $('#progressBar').css('width', '100%');
+          if (response.success) {
+            let statusMessage = `字体下载完成! 成功: ${response.success_count}/${response.total_count}`;
+            
+            if (response.errors && response.errors.length > 0) {
+              statusMessage += '<br><small class="text-danger">错误详情: ';
+              statusMessage += response.errors.slice(0, 3).join('; ');
+              if (response.errors.length > 3) {
+                statusMessage += ` 等${response.errors.length}个错误`;
+              }
+              statusMessage += '</small>';
+            }
+            
+            $('#downloadStatus').html(statusMessage);
+            $('#progressBar').removeClass('bg-primary').addClass('bg-success');
+            
+            // 如果下载成功，延迟刷新页面
+            if (response.success_count > 0) {
+              setTimeout(function() {
+                window.location.reload();
+              }, 2000);
+            }
+          } else {
+            $('#downloadStatus').html('下载任务失败: ' + response.message);
+            $('#progressBar').removeClass('bg-primary').addClass('bg-danger');
+          }
+        },
+        error: function(xhr) {
+          let errorMsg = '下载请求失败，请重试';
+          if (xhr.responseJSON && xhr.responseJSON.message) {
+            errorMsg += ': ' + xhr.responseJSON.message;
+          }
+          $('#downloadStatus').text(errorMsg);
+          $('#progressBar').css('width', '100%').removeClass('bg-primary').addClass('bg-danger');
+        }
+      });
+    }
+    
+    function generateCss() {
+      $('#downloadStatus').text('正在生成字体CSS文件...');
+      $('#downloadProgress').show();
+      $('#progressBar').css('width', '50%');
+      
+      $.ajax({
+        url: '/admin/fonts/generate-css',
+        method: 'POST',
+        contentType: 'application/json',
+        success: function(response) {
+          $('#progressBar').css('width', '100%');
+          if (response.success) {
+            $('#downloadStatus').html('CSS文件生成成功: ' + response.path);
+          } else {
+            $('#downloadStatus').text('CSS生成失败: ' + response.message);
+            $('#progressBar').removeClass('bg-success').addClass('bg-danger');
+          }
+        },
+        error: function() {
+          $('#downloadStatus').text('请求失败，请重试');
+          $('#progressBar').css('width', '100%').removeClass('bg-success').addClass('bg-danger');
+        }
+      });
+    }
+  });
+</script>
+{% endblock %} 

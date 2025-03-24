@@ -1,0 +1,410 @@
+{% extends "base.html" %}
+
+{% block title %}查看Office文件 - {{ file.original_filename }} - 自动化流程系统{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<!-- 引入本地部署的docx-preview, xlsx-preview, pptx-preview库 -->
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/office-viewer/office-viewer.css') }}">
+<style>
+    .file-container {
+        width: 100%;
+        height: calc(100vh - 180px);
+        overflow: hidden;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        margin-bottom: 15px;
+        position: relative;
+        background-color: #fff;
+    }
+    #office-viewer {
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        padding: 20px;
+    }
+    .watermark-notice {
+        font-size: 13px;
+        color: #666;
+        margin-top: 10px;
+        padding: 10px;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        border-left: 3px solid #17a2b8;
+    }
+    /* 水印样式 */
+    .watermark-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 100;
+        overflow: hidden;
+    }
+    .watermark {
+        position: absolute;
+        transform: rotate(-45deg);
+        font-size: 16px;
+        opacity: 0.1;
+        color: #000;
+        pointer-events: none;
+        white-space: nowrap;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="row mb-3">
+        <div class="col">
+            <h4 class="mb-0">
+                <i class="bi bi-file-earmark-text me-2"></i>{{ file.original_filename }}
+            </h4>
+            <p class="text-muted mb-0">
+                <small>上传于: {{ file.created_at.strftime('%Y-%m-%d %H:%M') }} | 大小: {{ (file.file_size / 1024)|round(2) }} KB</small>
+            </p>
+        </div>
+        <div class="col-auto">
+            <div class="btn-group">
+                <a href="{{ url_for('file.download_file', id=file.id) }}" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-download me-1"></i>下载
+                </a>
+                
+                {% if can_print %}
+                <a href="{{ url_for('file.print_file', id=file.id) }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-printer me-1"></i>打印
+                </a>
+                {% endif %}
+                
+                {% if can_edit %}
+                <a href="{{ url_for('file.view_file', id=file.id, mode='edit') }}" class="btn btn-outline-warning btn-sm">
+                    <i class="bi bi-pencil me-1"></i>编辑
+                </a>
+                {% endif %}
+                
+                {% if can_sign %}
+                <a href="{{ url_for('file.view_file', id=file.id, mode='sign') }}" class="btn btn-outline-success btn-sm">
+                    <i class="bi bi-pen me-1"></i>签署
+                </a>
+                {% endif %}
+                
+                {% if instance %}
+                <a href="{{ url_for('main.workflow_instance', id=instance.id) }}" class="btn btn-outline-info btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i>返回流程
+                </a>
+                {% else %}
+                <a href="{{ url_for('main.index') }}" class="btn btn-outline-info btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i>返回首页
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="watermark-notice">
+        <i class="bi bi-shield-lock me-2"></i>
+        查看文件时带有水印，保护文档安全。水印内容包含：用户名({{ current_user.username }})、用户姓名({{ current_user.full_name }})及当前时间。
+    </div>
+    
+    <div class="row">
+        <div class="col-md-9">
+            <div class="file-container">
+                <div id="office-viewer">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">加载中...</span>
+                        </div>
+                        <p class="mt-3">正在加载文档，请稍候...</p>
+                    </div>
+                </div>
+                <!-- 水印层 -->
+                <div class="watermark-container" id="watermark-container"></div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">文件信息</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>文件名</span>
+                            <span class="text-truncate" style="max-width: 200px;" title="{{ file.original_filename }}">{{ file.original_filename }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>文件类型</span>
+                            <span>{{ file.file_type|upper }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>文件大小</span>
+                            <span>{{ (file.file_size / 1024)|round(2) }} KB</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>上传者</span>
+                            <span>{{ file.creator.full_name or file.creator.username }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>上传时间</span>
+                            <span>{{ file.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- 文件操作记录 -->
+            <div class="card mt-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">操作记录</h5>
+                    <button class="btn btn-sm btn-outline-primary" id="refresh-operations">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div id="operations-container">
+                        <div class="text-center p-3">
+                            <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                <span class="visually-hidden">加载中...</span>
+                            </div>
+                            <p class="text-muted mt-2">加载操作记录...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<!-- 引入本地部署的Office文档查看库 -->
+<script src="{{ url_for('static', filename='vendor/office-viewer/mammoth.browser.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/office-viewer/xlsx.full.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/office-viewer/pptx.min.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 获取操作记录
+    loadOperations();
+    
+    // 刷新操作记录按钮
+    document.getElementById('refresh-operations').addEventListener('click', function() {
+        loadOperations();
+    });
+    
+    // 创建水印
+    createWatermark();
+    
+    // 加载文档
+    loadDocument();
+    
+    function loadDocument() {
+        const fileType = '{{ file.file_type }}'.toLowerCase();
+        const fileUrl = '{{ file_url }}';
+        const viewerElement = document.getElementById('office-viewer');
+        
+        // 根据文件类型选择不同的加载方法
+        if (fileType === 'docx' || fileType === 'doc') {
+            loadWordDocument(fileUrl, viewerElement);
+        } else if (fileType === 'xlsx' || fileType === 'xls') {
+            loadExcelDocument(fileUrl, viewerElement);
+        } else if (fileType === 'pptx' || fileType === 'ppt') {
+            loadPowerPointDocument(fileUrl, viewerElement);
+        } else {
+            viewerElement.innerHTML = '<div class="alert alert-warning m-3">不支持的文件类型</div>';
+        }
+    }
+    
+    // 加载Word文档
+    function loadWordDocument(url, container) {
+        fetch(url)
+            .then(response => response.arrayBuffer())
+            .then(arrayBuffer => {
+                return mammoth.convertToHtml({arrayBuffer: arrayBuffer});
+            })
+            .then(result => {
+                container.innerHTML = result.value;
+            })
+            .catch(error => {
+                console.error('加载Word文档失败:', error);
+                container.innerHTML = `
+                    <div class="alert alert-danger m-3">
+                        <p>加载文档失败</p>
+                        <small>${error.message}</small>
+                    </div>
+                `;
+            });
+    }
+    
+    // 加载Excel文档
+    function loadExcelDocument(url, container) {
+        fetch(url)
+            .then(response => response.arrayBuffer())
+            .then(arrayBuffer => {
+                const data = new Uint8Array(arrayBuffer);
+                const workbook = XLSX.read(data, {type: 'array'});
+                
+                let html = '<div class="xlsx-container">';
+                
+                // 处理每个工作表
+                workbook.SheetNames.forEach(function(sheetName) {
+                    const worksheet = workbook.Sheets[sheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet, {header: 1});
+                    
+                    html += `<h4 class="my-3">工作表: ${sheetName}</h4>`;
+                    html += '<table class="table table-bordered table-striped">';
+                    
+                    json.forEach(function(row) {
+                        html += '<tr>';
+                        if (row && row.length) {
+                            row.forEach(function(cell) {
+                                html += `<td>${cell || ''}</td>`;
+                            });
+                        } else {
+                            html += '<td></td>';
+                        }
+                        html += '</tr>';
+                    });
+                    
+                    html += '</table>';
+                });
+                
+                html += '</div>';
+                container.innerHTML = html;
+            })
+            .catch(error => {
+                console.error('加载Excel文档失败:', error);
+                container.innerHTML = `
+                    <div class="alert alert-danger m-3">
+                        <p>加载文档失败</p>
+                        <small>${error.message}</small>
+                    </div>
+                `;
+            });
+    }
+    
+    // 加载PowerPoint文档
+    function loadPowerPointDocument(url, container) {
+        container.innerHTML = '<div id="pptx-container" class="pptx-container"></div>';
+        const pptxContainer = document.getElementById('pptx-container');
+        
+        fetch(url)
+            .then(response => response.arrayBuffer())
+            .then(arrayBuffer => {
+                const pptx = new PptxJS();
+                pptx.parseFile(arrayBuffer)
+                    .then(slides => {
+                        pptx.render({
+                            container: pptxContainer,
+                            scale: {
+                                maxWidth: container.offsetWidth - 40
+                            }
+                        });
+                    });
+            })
+            .catch(error => {
+                console.error('加载PowerPoint文档失败:', error);
+                container.innerHTML = `
+                    <div class="alert alert-danger m-3">
+                        <p>加载文档失败</p>
+                        <small>${error.message}</small>
+                    </div>
+                `;
+            });
+    }
+    
+    // 创建水印
+    function createWatermark() {
+        const container = document.getElementById('watermark-container');
+        const username = '{{ current_user.username }}';
+        const fullname = '{{ current_user.full_name }}';
+        const date = new Date().toLocaleString();
+        const watermarkText = `${username} ${fullname} ${date}`;
+        
+        // 计算需要多少水印才能覆盖整个页面
+        const containerWidth = container.offsetWidth;
+        const containerHeight = container.offsetHeight;
+        const diagonal = Math.sqrt(containerWidth * containerWidth + containerHeight * containerHeight);
+        const watermarkWidth = diagonal / 2; // 对角线长度的一半作为水印宽度
+        
+        // 横向和纵向都多添加几个水印确保覆盖
+        for (let i = -watermarkWidth; i < containerWidth + watermarkWidth; i += watermarkWidth) {
+            for (let j = -watermarkWidth; j < containerHeight + watermarkWidth; j += watermarkWidth) {
+                const watermark = document.createElement('div');
+                watermark.className = 'watermark';
+                watermark.textContent = watermarkText;
+                watermark.style.left = `${i}px`;
+                watermark.style.top = `${j}px`;
+                container.appendChild(watermark);
+            }
+        }
+    }
+    
+    function loadOperations() {
+        fetch('{{ url_for("file.get_file_operations", id=file.id) }}')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateOperationsList(data.data);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading operations:', error);
+                document.getElementById('operations-container').innerHTML = `
+                    <div class="text-center p-3">
+                        <p class="text-danger">加载失败，请重试</p>
+                    </div>
+                `;
+            });
+    }
+    
+    function updateOperationsList(operations) {
+        const container = document.getElementById('operations-container');
+        
+        if (operations.length === 0) {
+            container.innerHTML = `
+                <div class="text-center p-3">
+                    <p class="text-muted">暂无操作记录</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '<ul class="list-group list-group-flush">';
+        
+        operations.forEach(operation => {
+            const date = new Date(operation.operation_time);
+            let operationType = '';
+            
+            switch(operation.operation_type) {
+                case 'upload': operationType = '上传'; break;
+                case 'view': operationType = '查看'; break;
+                case 'edit': operationType = '编辑'; break;
+                case 'sign': operationType = '签署'; break;
+                case 'delete': operationType = '删除'; break;
+                case 'print': operationType = '打印'; break;
+                default: operationType = operation.operation_type;
+            }
+            
+            html += `
+                <li class="list-group-item">
+                    <div class="d-flex justify-content-between">
+                        <span>${operation.user.full_name || operation.user.username}</span>
+                        <span class="badge bg-info">${operationType}</span>
+                    </div>
+                    <small class="text-muted">
+                        ${date.toLocaleString()}
+                    </small>
+                </li>
+            `;
+        });
+        
+        html += '</ul>';
+        container.innerHTML = html;
+    }
+});
+</script>
+{% endblock %} 

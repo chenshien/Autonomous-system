@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="google" content="notranslate">
+  <title>PDF查看器</title>
+
+  <!-- 样式 -->
+  <link rel="stylesheet" href="/static/css/fonts.css">
+  <link rel="stylesheet" href="/static/vendor/pdfjs/web/viewer.css">
+</head>
+
+<body>
+  <div id="toolbar">
+    <div class="toolbar-item" id="prevPage">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+        <path d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
+      </svg>
+      <span>上一页</span>
+    </div>
+    
+    <div class="toolbar-item">
+      <span>页码:</span>
+      <input type="number" id="pageNumber" min="1" value="1" style="width: 40px; text-align: center;">
+      <span id="totalPages">/ 1</span>
+    </div>
+    
+    <div class="toolbar-item" id="nextPage">
+      <span>下一页</span>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+      </svg>
+    </div>
+    
+    <div class="toolbar-separator"></div>
+    
+    <div class="toolbar-item" id="zoomOut">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+        <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+      </svg>
+      <span>放大</span>
+    </div>
+    
+    <div class="toolbar-item" id="zoomIn">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 8a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7A.5.5 0 0 1 4 8z"/>
+      </svg>
+      <span>缩小</span>
+    </div>
+    
+    <div class="toolbar-spacer"></div>
+    
+    <div class="toolbar-item" id="printButton">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+        <path d="M5 1a2 2 0 0 0-2 2v1h10V3a2 2 0 0 0-2-2H5zm6 8H5a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1z"/>
+        <path d="M0 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-1v-2a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2H2a2 2 0 0 1-2-2V7zm2.5 1a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z"/>
+      </svg>
+      <span>打印</span>
+    </div>
+  </div>
+  
+  <div id="viewerContainer">
+    <div id="viewer">
+      <div class="loading">正在加载PDF文件，请稍候...</div>
+    </div>
+  </div>
+  
+  <script src="/static/vendor/pdfjs/build/pdf.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // 获取URL中的file参数
+      const urlParams = new URLSearchParams(window.location.search);
+      const fileUrl = urlParams.get('file');
+      
+      if (!fileUrl) {
+        alert('未指定PDF文件');
+        return;
+      }
+      
+      // 配置PDF.js worker - 使用绝对路径
+      pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/build/pdf.worker.min.js';
+      
+      let pdfDoc = null,
+          pageNum = 1,
+          pageRendering = false,
+          pageNumPending = null,
+          scale = 1.0,
+          canvas = null,
+          ctx = null;
+      
+      /**
+       * 渲染指定页面
+       */
+      function renderPage(num) {
+        pageRendering = true;
+        
+        // 获取页面
+        pdfDoc.getPage(num).then(function(page) {
+          const viewport = page.getViewport({scale: scale});
+          
+          // 为这个页面创建画布
+          const pageDiv = document.createElement('div');
+          pageDiv.className = 'pdf-page';
+          pageDiv.style.width = viewport.width + 'px';
+          pageDiv.style.height = viewport.height + 'px';
+          
+          canvas = document.createElement('canvas');
+          pageDiv.appendChild(canvas);
+          ctx = canvas.getContext('2d');
+          canvas.height = viewport.height;
+          canvas.width = viewport.width;
+          
+          // 添加水印容器
+          const watermarkContainer = document.createElement('div');
+          watermarkContainer.className = 'watermark-container';
+          pageDiv.appendChild(watermarkContainer);
+          
+          // 添加水印
+          addWatermark(watermarkContainer, viewport.width, viewport.height);
+          
+          // 清除上一页（如果是第一页则清除loading）
+          if (document.querySelector('.loading')) {
+            document.querySelector('#viewer').innerHTML = '';
+          } else if (pageNum !== 1) {
+            // 如果不是第一页，清除前一页
+            document.querySelector('#viewer').innerHTML = '';
+          }
+          
+          document.querySelector('#viewer').appendChild(pageDiv);
+          
+          // 渲染PDF内容到画布
+          const renderContext = {
+            canvasContext: ctx,
+            viewport: viewport
+          };
+          
+          const renderTask = page.render(renderContext);
+          
+          // 等待渲染完成
+          renderTask.promise.then(function() {
+            pageRendering = false;
+            if (pageNumPending !== null) {
+              // 如果有待处理的页面请求，渲染它
+              renderPage(pageNumPending);
+              pageNumPending = null;
+            }
+          });
+        });
+        
+        // 更新页码显示
+        document.getElementById('pageNumber').value = num;
+        document.getElementById('totalPages').textContent = '/ ' + pdfDoc.numPages;
+      }
+      
+      /**
+       * 如果另一个页面正在渲染，则将页面更改排队
+       * 否则立即渲染
+       */
+      function queueRenderPage(num) {
+        if (pageRendering) {
+          pageNumPending = num;
+        } else {
+          renderPage(num);
+        }
+      }
+      
+      /**
+       * 显示上一页
+       */
+      function onPrevPage() {
+        if (pageNum <= 1) {
+          return;
+        }
+        pageNum--;
+        queueRenderPage(pageNum);
+      }
+      
+      /**
+       * 显示下一页
+       */
+      function onNextPage() {
+        if (pageNum >= pdfDoc.numPages) {
+          return;
+        }
+        pageNum++;
+        queueRenderPage(pageNum);
+      }
+      
+      /**
+       * 缩放PDF
+       */
+      function onZoomIn() {
+        scale += 0.1;
+        queueRenderPage(pageNum);
+      }
+      
+      /**
+       * 缩小PDF
+       */
+      function onZoomOut() {
+        if (scale <= 0.2) return;
+        scale -= 0.1;
+        queueRenderPage(pageNum);
+      }
+      
+      /**
+       * 打印文档
+       */
+      function onPrint() {
+        window.print();
+      }
+      
+      /**
+       * 从URL获取参数
+       */
+      function getParameterByName(name) {
+        const url = window.location.href;
+        name = name.replace(/[\[\]]/g, "\\$&");
+        const regex = new RegExp("[?&]" + name + "(=([^&#]*)|&|#|$)"),
+          results = regex.exec(url);
+        if (!results) return null;
+        if (!results[2]) return '';
+        return decodeURIComponent(results[2].replace(/\+/g, " "));
+      }
+      
+      /**
+       * 添加水印
+       */
+      function addWatermark(container, width, height) {
+        // 获取当前日期时间
+        const now = new Date();
+        const dateStr = now.toLocaleDateString() + ' ' + now.toLocaleTimeString();
+        
+        // 尝试从URL参数获取用户信息
+        const username = getParameterByName('username') || '系统用户';
+        const fullname = getParameterByName('fullname') || '未知用户';
+        
+        // 水印文本
+        const watermarkText = "克分行在线流程系统 " + username + " " + fullname + " " + dateStr;
+        
+        // 计算对角线长度，确定水印密度
+        const diagonal = Math.sqrt(width * width + height * height);
+        const watermarkWidth = diagonal / 3; // 水印之间的间距
+        
+        // 在整个容器上添加水印
+        for (let i = -watermarkWidth; i < width + watermarkWidth; i += watermarkWidth) {
+          for (let j = -watermarkWidth; j < height + watermarkWidth; j += watermarkWidth) {
+            const watermark = document.createElement('div');
+            watermark.className = 'watermark';
+            watermark.style.left = i + 'px';
+            watermark.style.top = j + 'px';
+            watermark.textContent = watermarkText;
+            container.appendChild(watermark);
+          }
+        }
+      }
+      
+      // 加载PDF文件
+      pdfjsLib.getDocument(fileUrl).promise.then(function(pdfDoc_) {
+        pdfDoc = pdfDoc_;
+        document.getElementById('totalPages').textContent = '/ ' + pdfDoc.numPages;
+        
+        // 初始渲染第一页
+        renderPage(pageNum);
+        
+        // 设置按钮事件
+        document.getElementById('prevPage').addEventListener('click', onPrevPage);
+        document.getElementById('nextPage').addEventListener('click', onNextPage);
+        document.getElementById('pageNumber').addEventListener('change', function() {
+          const num = parseInt(this.value);
+          if (num > 0 && num <= pdfDoc.numPages) {
+            pageNum = num;
+            queueRenderPage(pageNum);
+          }
+        });
+        document.getElementById('zoomIn').addEventListener('click', onZoomIn);
+        document.getElementById('zoomOut').addEventListener('click', onZoomOut);
+        document.getElementById('printButton').addEventListener('click', onPrint);
+        
+        // 键盘快捷键
+        document.addEventListener('keydown', function(e) {
+          if (e.key === 'ArrowLeft') {
+            onPrevPage();
+          } else if (e.key === 'ArrowRight') {
+            onNextPage();
+          } else if (e.ctrlKey && e.key === 'p') {
+            e.preventDefault();
+            onPrint();
+          }
+        });
+      }).catch(function(error) {
+        const errorMsg = document.createElement('div');
+        errorMsg.style.color = 'red';
+        errorMsg.style.padding = '20px';
+        errorMsg.textContent = '无法加载PDF文件: ' + error.message;
+        document.querySelector('#viewer').innerHTML = '';
+        document.querySelector('#viewer').appendChild(errorMsg);
+        console.error('加载PDF错误:', error);
+      });
+    });
+  </script>
+</body>
+</html> 
